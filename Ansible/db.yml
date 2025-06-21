@@ -1,0 +1,83 @@
+- name: Setup mysql database server
+  hosts: db
+  become: true
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: enable mysql repo
+      get_url:
+        url: https://repo.mysql.com/mysql80-community-release-el9-1.noarch.rpm
+        dest: /tmp/mysql80.rpm
+
+    - name: import mysql GPG key 
+      command: rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023
+      args:
+        creates: /etc/pki/rpm-gpg/RPM-GPG-KEY-mysql-2023
+
+    - name: install mysql repo 
+      yum:
+        name: /tmp/mysql80.rpm
+        state: present
+        disable_gpg_check: yes
+
+    - name: install mysql 
+      dnf:
+        name: mysql-community-server
+        state: present
+
+    - name: start and enable mysql 
+      service:
+        name: mysqld
+        state: started
+        enabled: yes
+
+    - name: Wait for mysql up
+      wait_for:
+        port: 3306
+        state: started
+        delay: 5
+        timeout: 30
+
+    - name: install pip
+      dnf:
+        name: python3-pip
+        state: present
+
+    - name: install PyMySQL 
+      pip:
+        name: PyMySQL
+
+    - name: Get temporary root password
+      shell: grep 'temporary password' /var/log/mysqld.log | awk '{print $NF}'
+      register: mysql_temp_password
+      changed_when: false
+
+    - name: debug temp password
+      debug:
+         msg: "{{ mysql_temp_password.stdout }}"
+
+    - name: Change root password using mysqladmin
+      shell: |
+        mysqladmin -u root -p'{{ mysql_temp_password.stdout }}' password '{{ mysql_root_password }}'
+      args:
+        executable: /bin/bash
+      register: change_password_result
+      ignore_errors: false
+
+    - name: create database
+      mysql_db:
+        name: "{{ mysql_database }}"
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+
+    - name: create mysql user
+      mysql_user:
+        name: "{{ mysql_user }}"
+        password: "{{ mysql_user_password }}"
+        priv: 'wordpress-db.*:ALL'
+        host: '%'
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"

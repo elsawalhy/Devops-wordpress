@@ -1,0 +1,62 @@
+stages:
+- provision
+- deployment
+
+
+create-infrastructure:
+   tags:
+      - my-runner
+   stage: provision
+   script:
+     - terraform init  
+     - terraform apply  -var-file="/home/gitlab-runner/terraform.tfvars" --auto-approve 
+     - terraform output -json > tf_output.json
+     - cat tf_output.json
+   artifacts:
+    paths:    
+      - tf_output.json
+    expire_in: 1 hour    
+
+deployment-wordpress:
+   stage: deployment
+   tags:
+      - my-runner
+   dependencies:
+    - create-infrastructure
+   before_script:
+
+      #->> extract targets ip,s from terraform output file   
+      - cat tf_output.json 
+      - export WORDPRESS_IP=$( jq -r '.wordpress_public_ip.value' tf_output.json)
+      - export DB_IP=$( jq -r '.db_private_ip.value' tf_output.json)
+      - echo "WordPress IP:"" $WORDPRESS_IP"
+      - echo "DB IP:"" $DB_IP"
+
+      #->> create the invintory
+   script: 
+      - |
+       cat <<EOF >inventory
+       [wordpress]
+       $WORDPRESS_IP   
+       [db]
+       $DB_IP  
+
+       [wordpress:vars]
+       ansible_user=ec2-user
+       ansible_ssh_private_key_file=/home/gitlab-runner/.ssh/id_rsa
+       ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+       
+       [db:vars]
+       ansible_user=ec2-user 
+       ansible_ssh_private_key_file=/home/gitlab-runner/.ssh/id_rsa
+       ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+       ansible_ssh_extra_args='-o ProxyCommand="ssh -i ~/.ssh/id_rsa -W %h:%p -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ec2-user@$WORDPRESS_IP"'
+       EOF
+
+      - cat inventory
+      - mv inventory Ansible/
+      - cd Ansible 
+      - ansible-playbook -i inventory db.yml --ssh-extra-args='-o StrictHostKeyChecking=no'
+      - ansible-playbook -i inventory wordpress.yml --ssh-extra-args='-o StrictHostKeyChecking=no'
+   
+      

@@ -1,0 +1,7 @@
+
+mysql_root_password: "MySecurePassw0rd!"
+mysql_user: "wordpress-user"
+mysql_user_password: "WpUs3r@2025!"
+mysql_database: "wordpress-db"
+
+wordpress_db_host: "{{ lookup('env', 'DB_IP') }}"

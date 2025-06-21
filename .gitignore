@@ -1,0 +1,10 @@
+# local .terraform dir
+.terraform 
+.terraform/*
+
+# tfstate files 
+*.tfstste
+*.tfstate.*
+
+# tfvars file , may include sensitev data
+*.tfvars
