@@ -1,4 +1,4 @@
-# local .terraform dir
+# .terraform dir
 .terraform 
 .terraform/*
 
@@ -6,5 +6,5 @@
 *.tfstste
 *.tfstate.*
 
-# tfvars file , may include sensitev data
+# tfvars file 
 *.tfvars
